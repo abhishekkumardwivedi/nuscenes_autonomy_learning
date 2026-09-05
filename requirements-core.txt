@@ -1,0 +1,8 @@
+# Model/data dependencies that are safe to install on top of a RunPod CUDA image.
+nuscenes-devkit>=1.2.0
+numpy>=1.24
+Pillow>=10.0
+matplotlib>=3.7
+pyquaternion>=0.9.9
+scipy>=1.10
+tqdm>=4.66

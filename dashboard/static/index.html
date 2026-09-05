@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Autonomy Learning Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div id="connectionBanner" class="connection-banner hidden">Connection to RunPod lost. Reconnecting…</div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div>
+        <div class="brand-title">Autonomy Learning Dashboard</div>
+        <div class="brand-subtitle">nuScenes → BEV → Temporal → Planning → Control</div>
+      </div>
+    </div>
+    <div class="status-strip">
+      <span id="backendStatus" class="status-pill neutral"><span class="dot"></span> Backend</span>
+      <span id="webrtcStatus" class="status-pill neutral"><span class="dot"></span> WebRTC</span>
+      <span id="deviceStatus" class="status-pill neutral">Device: —</span>
+      <button id="settingsBtn" class="icon-btn" title="Pipeline settings">⚙</button>
+    </div>
+  </header>
+
+  <section class="controlbar">
+    <div class="control-group compact">
+      <button id="runToBtn" class="btn primary">▶ Run to selected</button>
+      <button id="runStageBtn" class="btn">↻ Run selected stage</button>
+      <button id="stopBtn" class="btn danger" disabled>■ Stop</button>
+      <button id="resetBtn" class="btn ghost">Reset cache</button>
+    </div>
+    <div class="selection-summary">
+      Viewing <strong id="selectedStageLabel">Stage 00</strong>
+      <span class="muted">•</span>
+      <span id="selectedDataset">nuScenes Mini</span>
+    </div>
+  </section>
+
+  <section id="stageNavigator" class="stage-navigator" aria-label="Pipeline stages"></section>
+
+  <main id="workspace" class="workspace">
+    <section class="viewer-panel">
+      <div class="panel-header">
+        <div>
+          <div class="eyebrow">CURRENT VIEW</div>
+          <h1 id="viewerTitle">Stage 00 — Foundation / configuration</h1>
+        </div>
+        <div class="panel-actions">
+          <button id="fullScreenBtn" class="small-btn">⛶ Full screen</button>
+        </div>
+      </div>
+
+      <nav id="leftTabs" class="tabs">
+        <button class="tab active" data-tab="visual">Visual</button>
+        <button class="tab" data-tab="inputs">Inputs</button>
+        <button class="tab" data-tab="outputs">Outputs</button>
+        <button class="tab" data-tab="code">Code</button>
+        <button class="tab" data-tab="graphs">Artifacts</button>
+      </nav>
+
+      <div class="viewer-content">
+        <section id="left-visual" class="tab-page active">
+          <div id="visualShell" class="visual-shell">
+            <video id="webrtcVideo" autoplay playsinline muted></video>
+            <img id="fallbackImage" alt="Current stage visual" />
+            <div id="visualPlaceholder" class="visual-placeholder">
+              <div class="placeholder-icon">◫</div>
+              <div>No visual output yet</div>
+              <small>Run the selected stage or choose a completed stage.</small>
+            </div>
+            <div class="visual-badge" id="visualModeBadge">HTTP fallback</div>
+          </div>
+          <div class="visual-caption" id="visualCaption">The visual panel automatically follows the latest saved output from the selected/running stage.</div>
+        </section>
+
+        <section id="left-inputs" class="tab-page">
+          <div class="content-pad">
+            <h2>Expected inputs</h2>
+            <div id="inputsList" class="chip-list"></div>
+            <div class="teaching-note">These are the conceptual inputs to this stage. Actual runtime tensors are shown under <strong>Tensor Info</strong> after execution.</div>
+          </div>
+        </section>
+
+        <section id="left-outputs" class="tab-page">
+          <div class="content-pad">
+            <div class="section-row">
+              <h2>Stage output summary</h2>
+              <button id="refreshSummaryBtn" class="small-btn">Refresh</button>
+            </div>
+            <pre id="outputJson" class="json-view">No summary yet.</pre>
+          </div>
+        </section>
+
+        <section id="left-code" class="tab-page">
+          <div class="code-toolbar">
+            <select id="codeFileSelect" class="select"></select>
+            <span id="codeLineCount" class="muted"></span>
+            <button id="copyCodeBtn" class="small-btn">Copy</button>
+          </div>
+          <div class="code-shell"><pre id="codeView" class="code-view"></pre></div>
+        </section>
+
+        <section id="left-graphs" class="tab-page">
+          <div class="content-pad">
+            <div class="section-row">
+              <h2>Saved artifacts</h2>
+              <button id="refreshArtifactsBtn" class="small-btn">Refresh</button>
+            </div>
+            <div id="artifactGrid" class="artifact-grid"></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <aside class="info-panel">
+      <div class="stage-runtime-card">
+        <div class="runtime-head">
+          <div>
+            <div class="eyebrow">RUNTIME</div>
+            <strong id="runtimeStage">Stage 00</strong>
+          </div>
+          <span id="runtimeStatus" class="state-badge not_started">Not started</span>
+        </div>
+        <div class="progress-track"><div id="progressBar" class="progress-bar" style="width:0%"></div></div>
+        <div class="progress-meta">
+          <span id="progressText">0%</span>
+          <span id="currentStep">Waiting</span>
+        </div>
+      </div>
+
+      <nav id="rightTabs" class="tabs tabs-small">
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="logs">Logs</button>
+        <button class="tab" data-tab="tensor">Tensor Info</button>
+        <button class="tab" data-tab="params">Parameters</button>
+      </nav>
+
+      <div class="info-content">
+        <section id="right-overview" class="tab-page active">
+          <div class="content-pad compact-pad">
+            <div class="dataset-tag" id="overviewDataset">nuScenes Mini</div>
+            <h2 id="overviewTitle">Foundation / configuration</h2>
+            <p id="overviewConcept"></p>
+            <h3>Produces</h3>
+            <div id="outputsList" class="chip-list"></div>
+            <div id="errorCard" class="error-card hidden">
+              <strong id="errorTitle">Stage failed</strong>
+              <p id="errorMessage"></p>
+              <button id="retryStageBtn" class="small-btn danger">Retry stage</button>
+            </div>
+          </div>
+        </section>
+
+        <section id="right-logs" class="tab-page">
+          <div class="log-toolbar">
+            <button id="clearLogViewBtn" class="small-btn">Clear view</button>
+            <label><input id="autoScrollLogs" type="checkbox" checked /> Auto-scroll</label>
+          </div>
+          <div id="logView" class="log-view"></div>
+        </section>
+
+        <section id="right-tensor" class="tab-page">
+          <div class="content-pad compact-pad">
+            <div id="tensorCards" class="tensor-cards"><div class="empty-state">Run this stage to see tensor shapes and statistics.</div></div>
+          </div>
+        </section>
+
+        <section id="right-params" class="tab-page">
+          <div class="content-pad compact-pad">
+            <pre id="paramsJson" class="json-view small">Loading…</pre>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="footerbar">
+    <div id="pipelineFooter" class="pipeline-footer"></div>
+    <div class="footer-note">View any stage at any time. Execution and viewing are intentionally separate.</div>
+  </footer>
+
+  <div id="settingsModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div><div class="eyebrow">PIPELINE SETTINGS</div><h2>RunPod / nuScenes configuration</h2></div>
+        <button id="closeSettingsBtn" class="icon-btn">✕</button>
+      </div>
+      <div class="settings-grid">
+        <label>nuScenes dataroot<input id="cfgDataroot" /></label>
+        <label>Dataset version<input id="cfgVersion" /></label>
+        <label>Scene index<input id="cfgScene" type="number" /></label>
+        <label>Sample index<input id="cfgSample" type="number" /></label>
+        <label>History frames<input id="cfgHistory" type="number" min="1" /></label>
+        <label>Future frames<input id="cfgFuture" type="number" min="1" /></label>
+        <label>Device<input id="cfgDevice" placeholder="auto / cuda / cpu" /></label>
+        <label>Temporal model<select id="cfgTemporal"><option value="ema">EMA (interpretable)</option><option value="convgru">ConvGRU</option></select></label>
+        <label>Planner mode<select id="cfgPlanner"><option value="classical">Classical</option><option value="learned">Learned</option></select></label>
+        <label>Verbose<select id="cfgVerbose"><option value="0">0 — quiet</option><option value="1">1 — summary</option><option value="2">2 — learning</option><option value="3">3 — deep</option></select></label>
+      </div>
+      <div class="modal-note">Changing settings resets the in-memory pipeline cache so downstream tensors cannot accidentally use a different configuration.</div>
+      <div class="modal-actions">
+        <button id="saveSettingsBtn" class="btn primary">Save and reset pipeline</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

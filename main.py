@@ -10,31 +10,9 @@ from utils.logging_utils import LessonLogger
 
 import importlib
 
-# Metadata lives here so --list-stages works even before optional nuScenes/CARLA
-# dependencies are installed. Stage modules are imported only when executed.
-STAGES = [
-    (0,  "foundation",      "Foundation / configuration",                         "stages.stage00_foundation"),
-    (1,  "dataset",         "nuScenes sequence loading",                           "stages.stage01_dataset"),
-    (2,  "preprocess",      "Sensor loading and camera preprocessing",              "stages.stage02_sensor_preprocess"),
-    (3,  "geometry",        "Calibration and coordinate geometry",                  "stages.stage03_calibration_geometry"),
-    (4,  "encoder",         "Camera encoder: ResNet-50 + feature pyramid",           "stages.stage04_camera_encoder"),
-    (5,  "camera_bev",      "Camera features -> BEV (educational lift-splat)",       "stages.stage05_camera_bev"),
-    (6,  "radar_bev",       "Radar points -> radar BEV encoder",                    "stages.stage06_radar_bev"),
-    (7,  "spatial_fusion",  "Spatial BEV fusion: camera + radar",                   "stages.stage07_spatial_fusion"),
-    (8,  "ego_motion",      "Localization / ego motion between temporal frames",    "stages.stage08_localization_ego_motion"),
-    (9,  "temporal",        "Temporal BEV: ego-motion alignment + memory fusion",   "stages.stage09_temporal_bev"),
-    (10, "detection",       "Object detection representation and targets",          "stages.stage10_detection"),
-    (11, "tracking",        "Object tracking and track history",                    "stages.stage11_tracking"),
-    (12, "occupancy",       "Dynamic occupancy / occupied-space raster",            "stages.stage12_occupancy"),
-    (13, "prediction",      "Agent trajectory prediction",                          "stages.stage13_prediction"),
-    (14, "map",             "HD-map / road context",                                "stages.stage14_map_context"),
-    (15, "world_model",     "World-model assembly",                                 "stages.stage15_world_model"),
-    (16, "behavior",        "Behavior planning",                                    "stages.stage16_behavior_planning"),
-    (17, "motion_planning", "Motion planning / future ego trajectory",              "stages.stage17_motion_planning"),
-    (18, "control",         "Vehicle control: trajectory -> steer / throttle / brake", "stages.stage18_vehicle_control"),
-    (19, "safety",          "Runtime safety / fallback supervision",                "stages.stage19_safety_supervision"),
-    (20, "closed_loop",     "Closed-loop integration boundary",                     "stages.stage20_closed_loop"),
-]
+# Single stage registry shared by the CLI and browser dashboard.
+from dashboard.stage_metadata import STAGES as STAGE_META
+STAGES = [(s.number, s.alias, s.title, s.module) for s in STAGE_META]
 
 
 ALIASES = {name: number for number, name, _title, _path in STAGES}

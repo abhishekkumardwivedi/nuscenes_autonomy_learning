@@ -1,0 +1,5 @@
+# Browser dashboard / live telemetry.
+fastapi>=0.141,<1
+uvicorn[standard]>=0.30,<1
+aiortc>=1.15,<2
+av>=14,<17

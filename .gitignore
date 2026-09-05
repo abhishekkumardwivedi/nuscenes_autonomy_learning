@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Local configuration / secrets
+.env
+*.pem
+*.key
+
+# Large data and generated outputs
+data/
+datasets/
+outputs/
+autonomy-outputs/
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
