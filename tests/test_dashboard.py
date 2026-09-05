@@ -164,6 +164,10 @@ class AccessTests(unittest.TestCase):
                 self.assertEqual(client.get('/api/health').status_code,200)
                 with client.websocket_connect('/ws') as socket: self.assertEqual(socket.receive_text(),'ok')
                 self.assertEqual(client.post('/login',content='token=test-token',headers={'Origin':'https://evil.invalid'}).status_code,403)
+                proxy_headers={'Origin':'https://dashboard.example','X-Forwarded-Host':'dashboard.example'}
+                self.assertEqual(client.post('/login',content='token=test-token',headers=proxy_headers,follow_redirects=False).status_code,303)
+                with client.websocket_connect('/ws',headers=proxy_headers) as socket:
+                    self.assertEqual(socket.receive_text(),'ok')
 
     @unittest.skipUnless(os.name=='posix','PTY requires Linux')
     def test_pty_reconnect_resize_interrupt(self):
