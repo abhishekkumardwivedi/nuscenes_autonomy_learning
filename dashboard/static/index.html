@@ -43,13 +43,13 @@
 
   <main id="workspace" class="workspace">
     <section id="viewerPanel" class="viewer-panel">
-      <div class="panel-header">
+      <div class="panel-header" title="Double-click this header to toggle fullscreen">
         <div>
           <div class="eyebrow">CURRENT VIEW</div>
           <h1 id="viewerTitle">Stage 00 — Foundation / configuration</h1>
         </div>
         <div class="panel-actions">
-          <button id="fullScreenBtn" class="small-btn">⛶ Full screen</button>
+          <button id="fullScreenBtn" class="small-btn" aria-label="Toggle current view fullscreen" aria-pressed="false">⛶ Full screen</button>
         </div>
       </div>
 
@@ -125,12 +125,15 @@
     <div id="panelDivider" class="panel-divider" role="separator" tabindex="0" aria-label="Resize panels" aria-orientation="vertical" aria-controls="viewerPanel infoPanel" aria-valuemin="25" aria-valuemax="75" aria-valuenow="65" title="Drag to resize panels. Arrow keys adjust width; double-click to reset."></div>
     <aside id="infoPanel" class="info-panel">
       <div class="stage-runtime-card">
-        <div class="runtime-head">
+        <div class="runtime-head" title="Double-click this header to toggle fullscreen">
           <div>
             <div class="eyebrow">RUNTIME</div>
             <strong id="runtimeStage">Stage 00</strong>
           </div>
-          <span id="runtimeStatus" class="state-badge not_started">Not started</span>
+          <div class="panel-actions">
+            <span id="runtimeStatus" class="state-badge not_started">Not started</span>
+            <button id="runtimeFullScreenBtn" class="small-btn" aria-label="Toggle runtime fullscreen" aria-pressed="false">⛶ Full screen</button>
+          </div>
         </div>
         <div class="progress-track"><div id="progressBar" class="progress-bar" style="width:0%"></div></div>
         <div class="progress-meta">

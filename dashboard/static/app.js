@@ -578,9 +578,16 @@ async function saveSettings() {
   } catch (e) { toast(e.message, 'bad'); }
 }
 
-function toggleFullScreen() {
-  const target = $('viewer-panel') || document.querySelector('.viewer-panel');
-  document.querySelector('.viewer-panel').classList.toggle('fullscreen-panel');
+function toggleFullScreen(panelId) {
+  const target = $(panelId);
+  const expand = target && !target.classList.contains('fullscreen-panel');
+  for (const [id, buttonId] of [['viewerPanel', 'fullScreenBtn'], ['infoPanel', 'runtimeFullScreenBtn']]) {
+    const active = Boolean(expand && id === panelId);
+    $(id).classList.toggle('fullscreen-panel', active);
+    $(buttonId).textContent = active ? '⛶ Restore' : '⛶ Full screen';
+    $(buttonId).setAttribute('aria-pressed', String(active));
+  }
+  document.body.classList.toggle('panel-expanded', Boolean(expand));
 }
 
 function setupPanelDivider() {
@@ -710,7 +717,16 @@ function wireUi() {
   $('settingsBtn').onclick = openSettings;
   $('closeSettingsBtn').onclick = () => $('settingsModal').classList.add('hidden');
   $('saveSettingsBtn').onclick = saveSettings;
-  $('fullScreenBtn').onclick = toggleFullScreen;
+  $('fullScreenBtn').onclick = () => toggleFullScreen('viewerPanel');
+  $('runtimeFullScreenBtn').onclick = () => toggleFullScreen('infoPanel');
+  for (const [selector, panelId] of [['.panel-header', 'viewerPanel'], ['.runtime-head', 'infoPanel']]) {
+    document.querySelector(selector).ondblclick = event => {
+      if (!event.target.closest('button')) toggleFullScreen(panelId);
+    };
+  }
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && document.body.classList.contains('panel-expanded')) toggleFullScreen(null);
+  });
   $('settingsModal').onclick = (e) => { if (e.target === $('settingsModal')) $('settingsModal').classList.add('hidden'); };
 }
 

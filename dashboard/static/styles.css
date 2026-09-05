@@ -242,3 +242,10 @@ body.resizing-panels { cursor: col-resize; user-select: none; }
   .status-strip { gap: 3px; }
   .status-pill { font-size: 9px; padding: 3px 5px; }
 }
+.panel-actions { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+.panel-header, .runtime-head { cursor: default; }
+body.panel-expanded { overflow: hidden; }
+.info-panel.fullscreen-panel .info-content { overflow: auto; }
+.info-panel.fullscreen-panel .log-view { height: calc(100vh - 130px); min-height: 0; }
+.info-panel.fullscreen-panel .json-view { max-height: calc(100vh - 180px); }
+.viewer-panel.fullscreen-panel .code-shell { height: calc(100vh - 130px); min-height: 0; }
