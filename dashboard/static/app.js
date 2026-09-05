@@ -93,6 +93,7 @@ function renderFooterProgress() {
 }
 
 async function selectStage(number) {
+  if (appState.selectedStage !== number) $('fitVisualBtn').click();
   appState.selectedStage = number;
   const meta = selectedMeta();
   $('selectedStageLabel').textContent = `Stage ${String(number).padStart(2,'0')} — ${meta.alias}`;
@@ -638,7 +639,58 @@ function setupPanelDivider() {
   apply(share, false);
 }
 
+function setupVisualNavigation() {
+  const shell = $('visualShell');
+  let zoom = 1, x = 0, y = 0;
+  let pointer = null;
+  function render() {
+    shell.style.setProperty('--visual-transform', `translate(${x}px, ${y}px) scale(${zoom})`);
+    $('zoomLevel').textContent = `${Math.round(zoom * 100)}%`;
+    $('zoomOutBtn').disabled = zoom <= 1;
+    $('zoomInBtn').disabled = zoom >= 8;
+  }
+  function fit() { zoom = 1; x = 0; y = 0; render(); }
+  function scaleTo(value, cx = 0, cy = 0) {
+    const next = Math.max(1, Math.min(8, value));
+    x = cx - (cx - x) * next / zoom;
+    y = cy - (cy - y) * next / zoom;
+    zoom = next;
+    if (zoom === 1) { x = 0; y = 0; }
+    render();
+  }
+  $('fitVisualBtn').onclick = fit;
+  $('zoomInBtn').onclick = () => scaleTo(zoom * 1.25);
+  $('zoomOutBtn').onclick = () => scaleTo(zoom / 1.25);
+  shell.addEventListener('wheel', event => {
+    if (event.target.closest('.visual-tools')) return;
+    event.preventDefault();
+    const rect = shell.getBoundingClientRect();
+    scaleTo(zoom * Math.exp(-event.deltaY * .002), event.clientX - rect.left - rect.width / 2, event.clientY - rect.top - rect.height / 2);
+  }, { passive: false });
+  shell.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || event.target.closest('.visual-tools') || pointer) return;
+    pointer = { id: event.pointerId, x: event.clientX, y: event.clientY };
+    shell.setPointerCapture(event.pointerId);
+    shell.style.cursor = 'grabbing';
+    event.preventDefault();
+  });
+  shell.addEventListener('pointermove', event => {
+    if (!pointer || pointer.id !== event.pointerId) return;
+    x += event.clientX - pointer.x;
+    y += event.clientY - pointer.y;
+    pointer.x = event.clientX; pointer.y = event.clientY;
+    render();
+  });
+  function finish() { pointer = null; shell.style.cursor = ''; }
+  shell.addEventListener('pointerup', finish);
+  shell.addEventListener('pointercancel', finish);
+  shell.addEventListener('lostpointercapture', finish);
+  shell.addEventListener('dblclick', event => { if (!event.target.closest('.visual-tools')) fit(); });
+  render();
+}
+
 function wireUi() {
+  setupVisualNavigation();
   setupPanelDivider();
   document.querySelectorAll('#leftTabs .tab').forEach(btn => btn.onclick = () => setLeftTab(btn.dataset.tab));
   document.querySelectorAll('#rightTabs .tab').forEach(btn => btn.onclick = () => setRightTab(btn.dataset.tab));

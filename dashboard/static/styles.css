@@ -185,3 +185,60 @@ body.resizing-panels { cursor: col-resize; user-select: none; }
   .brand-title { font-size: 13px; }
   .workspace { padding: 9px; }
 }
+
+/* Compact controls leave the workspace as the primary surface. */
+.topbar { min-height: 44px; padding: 5px 12px; gap: 8px; }
+.brand { gap: 8px; }
+.brand-mark { width: 26px; height: 26px; border-radius: 7px; font-size: 12px; }
+.brand-title { font-size: 13px; }
+.brand-subtitle { display: none; }
+.status-strip { gap: 5px; }
+.status-pill { padding: 4px 7px; font-size: 10px; }
+.icon-btn { width: 28px; height: 28px; }
+.controlbar { padding: 5px 12px; gap: 8px; }
+.control-group { gap: 5px; }
+.btn { padding: 5px 8px; font-size: 11px; border-radius: 6px; }
+.selection-summary { font-size: 10px; }
+.stage-navigator { padding: 5px 12px; gap: 4px; }
+.stage-chip { min-width: auto; max-width: none; padding: 4px 7px; border-radius: 6px; }
+.stage-chip .num { width: auto; height: auto; padding: 2px 4px; border-radius: 4px; font-size: 10px; margin-right: 4px; }
+.stage-chip .name { font-size: 10px; }
+.stage-chip .state-dot { height: 2px; margin-top: 3px; }
+.workspace { padding: 8px 12px; min-height: calc(100vh - 157px); }
+.panel-header { padding: 8px 10px 6px; gap: 6px; }
+.panel-header .eyebrow { display: none; }
+.panel-header h1 { font-size: 13px; margin: 0; }
+.small-btn { padding: 4px 7px; font-size: 11px; }
+.tabs { padding: 0 7px; }
+.tab { padding: 6px 8px; font-size: 11px; }
+.stage-runtime-card { padding: 7px 10px; }
+.runtime-head .eyebrow { display: none; }
+.runtime-head strong { margin: 0; font-size: 11px; }
+.state-badge { padding: 3px 6px; font-size: 9px; }
+.progress-track { margin-top: 6px; height: 4px; }
+.progress-meta { margin-top: 4px; }
+.tabs-small .tab { padding: 6px 7px; font-size: 11px; }
+.viewer-content { min-height: 320px; }
+.visual-shell { height: calc(100vh - 255px); min-height: 320px; max-height: none; cursor: grab; touch-action: none; user-select: none; }
+.visual-shell video, .visual-shell img { position: absolute; inset: 0; width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: contain; transform: var(--visual-transform, translate(0px, 0px) scale(1)); transform-origin: center; pointer-events: none; }
+.visual-tools { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 5px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px; background: rgba(11,16,32,.94); white-space: nowrap; cursor: default; }
+.visual-tools output { min-width: 38px; text-align: center; font-size: 11px; }
+.visual-tools span { color: var(--muted); font-size: 10px; }
+.visual-badge { font-size: 9px; padding: 3px 6px; top: 6px; right: 6px; pointer-events: none; }
+.visual-caption { padding: 4px 8px; font-size: 10px; overflow-wrap: anywhere; }
+.log-view { height: calc(100vh - 267px); min-height: 300px; font-size: 12px; }
+.code-shell { height: calc(100vh - 270px); min-height: 300px; }
+.footerbar { padding: 3px 12px 6px; }
+.footer-note { display: none; }
+.fullscreen-panel .visual-shell { height: calc(100vh - 103px); }
+@media (max-width: 980px) {
+  .controlbar { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .workspace { gap: 8px; }
+  .visual-shell { height: 58vh; }
+  .log-view, .code-shell { height: 48vh; }
+}
+@media (max-width: 620px) {
+  .visual-tools span { display: none; }
+  .status-strip { gap: 3px; }
+  .status-pill { font-size: 9px; padding: 3px 5px; }
+}

@@ -65,13 +65,20 @@
         <section id="left-visual" class="tab-page active">
           <div id="visualShell" class="visual-shell">
             <video id="webrtcVideo" autoplay playsinline muted></video>
-            <img id="fallbackImage" alt="Current stage visual" />
+            <img id="fallbackImage" alt="Current stage visual" draggable="false" />
             <div id="visualPlaceholder" class="visual-placeholder">
               <div class="placeholder-icon">◫</div>
               <div>No visual output yet</div>
               <small>Run the selected stage or choose a completed stage.</small>
             </div>
             <div class="visual-badge" id="visualModeBadge">HTTP fallback</div>
+            <div class="visual-tools" aria-label="Visual controls">
+              <button id="zoomOutBtn" class="small-btn" aria-label="Zoom out" title="Zoom out">−</button>
+              <output id="zoomLevel" aria-live="polite">100%</output>
+              <button id="zoomInBtn" class="small-btn" aria-label="Zoom in" title="Zoom in">+</button>
+              <button id="fitVisualBtn" class="small-btn" title="Fit entire image and reset pan">Fit</button>
+              <span>Scroll to zoom · drag to pan</span>
+            </div>
           </div>
           <div class="visual-caption" id="visualCaption">The visual panel automatically follows the latest saved output from the selected/running stage.</div>
         </section>
