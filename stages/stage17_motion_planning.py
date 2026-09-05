@@ -102,7 +102,7 @@ def run(ctx: PipelineContext, cfg: PipelineConfig, log: LessonLogger) -> None:
     classical_selected = candidates[best_idx]
 
     log.substage(17, 3, "Expose the learned planning-model alternative")
-    bev = ctx.get("temporal_bev")
+    bev = ctx.get("temporal_bev").to(cfg.torch_device)
     learned_model = LearnedTrajectoryPlanner(bev.shape[0], len(times)).to(cfg.torch_device).eval()
     speed_tensor = torch.tensor([[speed]], dtype=bev.dtype, device=bev.device)
     with torch.no_grad():

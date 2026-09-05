@@ -55,6 +55,19 @@ Expected metadata directory:
 
 Open the RunPod HTTP endpoint for port 8080 in your local browser.
 
+To keep the dashboard running after disconnecting SSH:
+
+```bash
+mkdir -p outputs
+nohup ./scripts/run_dashboard.sh > outputs/dashboard.log 2>&1 < /dev/null &
+echo $! > outputs/dashboard.pid
+```
+
+This survives SSH disconnects, but rerun it after a pod restart. Read
+`outputs/dashboard.log` for startup errors. If you choose another exposed HTTP
+port, set `DASHBOARD_PORT` in `.env`. Port 8888 is commonly occupied by Jupyter;
+stop Jupyter only if you intend to replace it with this dashboard.
+
 ## 6. What connection indicators mean
 
 - **Backend connected**: REST + WebSocket are alive; stage control/logging works.
