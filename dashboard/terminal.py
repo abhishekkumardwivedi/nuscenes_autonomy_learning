@@ -8,9 +8,13 @@ import codecs
 import os
 import secrets
 import signal
+import subprocess
+import sys
+import anyio
 import threading
 import time
 from collections import deque
+from pathlib import Path
 
 
 class TerminalSession:
@@ -23,15 +27,18 @@ class TerminalSession:
         self.size = 0
         self.last_seen = time.monotonic()
         self.closed = False
-        # fork+exec under a PTY establishes a controlling terminal, essential for
-        # job control, Ctrl+C, top, and interactive Python.
-        pid, fd = pty.fork()
-        if pid == 0:
-            os.chdir(cwd)
-            env = dict(os.environ, TERM='xterm-256color', COLORTERM='truecolor')
-            env.pop('DASHBOARD_TOKEN', None)
-            os.execvpe('/bin/bash', ['/bin/bash', '-i'], env)
-        self.pid, self.fd = pid, fd
+        # Use a fresh child interpreter to acquire the controlling terminal.
+        # No Python code runs between fork and exec in the multithreaded server.
+        master, slave = pty.openpty()
+        env = dict(os.environ, TERM='xterm-256color', COLORTERM='truecolor')
+        env.pop('DASHBOARD_TOKEN', None)
+        env['PATH'] = str(Path(sys.prefix)/'bin') + os.pathsep + env.get('PATH','')
+        env['HISTFILE'] = str(Path(os.getenv('PERSISTENT_ROOT', cwd))/'.autonomy_console_history')
+        helper = "import fcntl,termios,os; fcntl.ioctl(0,termios.TIOCSCTTY,0); os.execvpe('/bin/bash',['/bin/bash','--noprofile','--norc','-i'],os.environ)"
+        self.process = subprocess.Popen([sys.executable,'-c',helper], stdin=slave, stdout=slave, stderr=slave,
+                                        cwd=cwd, env=env, start_new_session=True, close_fds=True)
+        os.close(slave)
+        self.pid, self.fd = self.process.pid, master
         self.reader = threading.Thread(target=self._read, daemon=True, name='console-reader')
         self.reader.start()
 
@@ -54,7 +61,7 @@ class TerminalSession:
         finally:
             self.closed = True
             try:
-                os.waitpid(self.pid, 0)
+                self.process.wait()
             except ChildProcessError:
                 pass
 
@@ -66,7 +73,8 @@ class TerminalSession:
 
     def close(self):
         try:
-            os.killpg(self.pid, signal.SIGHUP)
+            if self.process.poll() is None:
+                os.killpg(self.pid, signal.SIGHUP)
         except ProcessLookupError:
             pass
         try:
@@ -129,10 +137,14 @@ class TerminalManager:
             done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
             for task in done:
                 task.result()
-        except Exception:
+        except (Exception, asyncio.CancelledError):
             pass
         finally:
             for task in tasks:
                 task.cancel()
-            await asyncio.gather(*tasks, return_exceptions=True)
-            await websocket.close()
+            with anyio.CancelScope(shield=True):
+                await asyncio.gather(*tasks, return_exceptions=True)
+                try:
+                    await websocket.close()
+                except (RuntimeError, OSError):
+                    pass
