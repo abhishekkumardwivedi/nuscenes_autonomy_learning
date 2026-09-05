@@ -23,11 +23,12 @@ class DashboardAccess:
         if scope['type'] not in {'http', 'websocket'}:
             return await self.app(scope, receive, send)
         headers = dict(scope.get('headers', []))
-        host = headers.get(b'host', b'').decode()
+        host = headers.get(b'x-forwarded-host', headers.get(b'host', b'')).decode().split(',')[0].strip()
         origin = headers.get(b'origin', b'').decode()
         # Same-origin mutations and WebSockets prevent cross-site shell control.
         from urllib.parse import urlsplit
-        if origin and urlsplit(origin).netloc != host and (scope['type'] == 'websocket' or scope.get('method') not in {'GET', 'HEAD'}):
+        allowed_origin = os.getenv('DASHBOARD_PUBLIC_ORIGIN', '').rstrip('/')
+        if origin and origin != allowed_origin and urlsplit(origin).netloc != host and (scope['type'] == 'websocket' or scope.get('method') not in {'GET', 'HEAD'}):
             if scope['type'] == 'websocket':
                 return await send({'type': 'websocket.close', 'code': 1008})
             return await JSONResponse({'detail': 'Cross-origin request rejected'}, 403)(scope, receive, send)
