@@ -582,7 +582,64 @@ function toggleFullScreen() {
   document.querySelector('.viewer-panel').classList.toggle('fullscreen-panel');
 }
 
+function setupPanelDivider() {
+  const workspace = $('workspace');
+  const divider = $('panelDivider');
+  const storageKey = 'autonomy.viewerShare';
+  let share = 65;
+  let activePointer = null;
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (saved !== null && Number.isFinite(Number(saved))) share = Number(saved);
+  } catch (_) { /* Resizing still works when browser storage is unavailable. */ }
+  function apply(value, save = true) {
+    share = Math.max(25, Math.min(75, value));
+    workspace.style.setProperty('--viewer-share', `${share}fr`);
+    workspace.style.setProperty('--info-share', `${100 - share}fr`);
+    divider.setAttribute('aria-valuenow', String(Math.round(share)));
+    divider.setAttribute('aria-valuetext', `Viewer ${Math.round(share)}%, information ${Math.round(100 - share)}%`);
+    if (save) {
+      try { localStorage.setItem(storageKey, String(share)); } catch (_) {}
+    }
+  }
+  divider.addEventListener('pointerdown', event => {
+    if (event.button !== 0 || activePointer !== null) return;
+    activePointer = event.pointerId;
+    divider.setPointerCapture(event.pointerId);
+    divider.focus();
+    document.body.classList.add('resizing-panels');
+    event.preventDefault();
+  });
+  divider.addEventListener('pointermove', event => {
+    if (event.pointerId !== activePointer) return;
+    const rect = workspace.getBoundingClientRect();
+    const style = getComputedStyle(workspace);
+    const left = parseFloat(style.paddingLeft);
+    const available = rect.width - left - parseFloat(style.paddingRight) - divider.offsetWidth;
+    if (available > 0) apply((event.clientX - rect.left - left - divider.offsetWidth / 2) / available * 100, false);
+  });
+  function finish() {
+    if (activePointer === null) return;
+    activePointer = null;
+    document.body.classList.remove('resizing-panels');
+    apply(share);
+  }
+  divider.addEventListener('pointerup', finish);
+  divider.addEventListener('pointercancel', finish);
+  divider.addEventListener('lostpointercapture', finish);
+  divider.addEventListener('dblclick', () => apply(65));
+  divider.addEventListener('keydown', event => {
+    const step = event.shiftKey ? 10 : 2;
+    const values = { ArrowLeft: share - step, ArrowRight: share + step, Home: 25, End: 75 };
+    if (!(event.key in values)) return;
+    event.preventDefault();
+    apply(values[event.key]);
+  });
+  apply(share, false);
+}
+
 function wireUi() {
+  setupPanelDivider();
   document.querySelectorAll('#leftTabs .tab').forEach(btn => btn.onclick = () => setLeftTab(btn.dataset.tab));
   document.querySelectorAll('#rightTabs .tab').forEach(btn => btn.onclick = () => setRightTab(btn.dataset.tab));
   $('runToBtn').onclick = () => run('run_to');
