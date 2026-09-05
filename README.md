@@ -1,76 +1,49 @@
-# Autonomy Learning Dashboard — nuScenes → Temporal BEV → Planning
+# Autonomy Learning Dashboard
 
-A **teaching-first, browser-controlled autonomy stack**. The project exposes each major transformation instead of hiding everything behind one training command.
+An educational nuScenes Stage 00–20 pipeline with a browser dashboard. Individual
+stage Python files, code viewing, learning logs and artifacts remain central.
+Some model heads are untrained teaching examples; this is not a production driving stack.
 
-## One dashboard, 21 stages
+## Normal workflow
 
-```text
-00 Foundation                11 Tracking
-01 Dataset                   12 Occupancy
-02 Sensor preprocessing      13 Agent prediction
-03 Calibration / geometry    14 HD-map context
-04 Camera encoder            15 World model
-05 Camera → BEV              16 Behavior planning
-06 Radar → BEV               17 Motion planning
-07 Spatial fusion            18 Vehicle control
-08 Ego motion                19 Safety supervision
-09 Temporal BEV              20 Closed-loop boundary
-10 Detection
-```
+Create CUDA RunPod with persistent storage → bootstrap → authenticated port 8888
+dashboard → select scene/stage → Run To → inspect Visual / Logs / Tensor / Code /
+Hardware → move between stages → use Console when needed.
 
-Stages 00–15 are primarily exercised on **nuScenes Mini**. Serious planner/closed-loop work later moves to **nuPlan/CARLA**, while the same dashboard and stage interfaces remain useful.
+- Adjustable panel divider, fullscreen/header double-click, visual zoom/pan/Fit.
+- Compact controls with progress, elapsed time, cancellation, tracebacks and retry.
+- Left: Visual, Inputs, Outputs, Code, Graphs, Artifacts, Console.
+- Right: Overview, Logs, Tensor Info, Parameters, Hardware, Profiler.
+- Authenticated Linux PTY over the dashboard WSS port; reconnect, resize, Ctrl+C.
+- NVML/psutil telemetry, rolling graphs, per-stage JSON profiles and comparison.
+- Basic/Learning/Detailed bounded on-device tensor inspection.
+- Scene playback, pause, previous/next, timeline, speeds and frame artifact caching.
+- Same-port HTTPS/WSS works without UDP WebRTC.
 
-## Why the dashboard exists
-
-The local browser shows, for the selected stage:
-
-- live/saved visual output,
-- conceptual inputs and outputs,
-- exact Python source code,
-- structured logs,
-- tensor shape/dtype/min/max/mean/std/memory summaries,
-- saved images/JSON artifacts,
-- progress, warnings, failures and connection state.
-
-You can switch to any stage at any time without rerunning it.
-
-## Run on RunPod
+## RunPod startup
 
 ```bash
-./scripts/setup_runpod.sh
-cp .env.example .env
-./scripts/run_dashboard.sh
+bash /workspace/autonomy-learning-dashboard/scripts/runpod_boot.sh
 ```
 
-Expose HTTP port **8080**. See `DEPLOY_RUNPOD.md`.
+Configure that as the template startup command and expose HTTP 8888. Read
+[DEPLOY_RUNPOD.md](DEPLOY_RUNPOD.md) for first clone, persistent authentication,
+paths, compatible images and troubleshooting. A readiness marker avoids repeated
+pip installs. Jupyter remains installed but 8888 is reserved for this dashboard.
+Persistent storage holds data, environment, model caches, settings, outputs and
+logs. Processes and in-memory tensor caches disappear with the disposable Pod.
 
-## Networking
+## Architecture
 
-- **WebSocket**: progress, logs, tensor/runtime events and automatic reconnection.
-- **WebRTC**: preferred live visual stream when ICE connectivity is available.
-- **HTTP visual fallback**: always available through the same port, so WebRTC is never a deployment blocker.
+- `stages/`: Stage 00–20 educational modules; Stage 01 adds explicit replay padding.
+- `dashboard/runner.py`: execution, caching, status and cancellation.
+- `dashboard/hardware.py`, `profiling.py`: sampling and stage resource measurement.
+- `dashboard/playback.py`: scene catalog, sequential frame orchestration/cache.
+- `dashboard/terminal.py`, `security.py`: PTY and shared access gate.
+- `dashboard/extensions.py`, `static/extensions.js`: infrastructure API/UI.
+- `scripts/`: environment validation, bootstrap and launch.
 
-The WebRTC implementation supports optional STUN/TURN settings from `.env`.
-
-## CLI still works
-
-```bash
-python main.py --list-stages
-python main.py --dataroot /workspace/data/nuscenes --stop-after temporal --history 4 --verbose 3
-```
-
-## Teaching rule
-
-Randomly initialized model outputs are never presented as if they were learned autonomy. Where training does not yet exist, the project deliberately shows real nuScenes ground truth and/or transparent deterministic baselines next to the learnable module.
-
-## Repository checks
-
-```bash
-python scripts/validate_repo.py
-./scripts/check_dashboard.sh
-python smoke_test.py
-```
-
-## Deployment changes
-
-`CODEX_RUNPOD.md` instructs Codex to turn any reusable RunPod deployment workaround into a repository script/config/documentation change, validate it, and commit the durable fix—without committing datasets, outputs, checkpoints or secrets.
+Validate with `python -m unittest discover -s tests -v`, `python smoke_test.py`,
+and `./scripts/check_dashboard.sh`. See [START_HERE.md](START_HERE.md) and
+[STAGE_MAP.md](STAGE_MAP.md). Metrics are measured, sampled or explicitly N/A;
+first-pass playback is compute-paced, not guaranteed real-time inference.

@@ -45,6 +45,8 @@ class PipelineConfig:
 
     # Execution / display controls.
     verbose: int = 2
+    profile_level: str = 'learning'
+    playback_mode: bool = False
     save_plots: bool = True
     device: str = "auto"
     seed: int = 7

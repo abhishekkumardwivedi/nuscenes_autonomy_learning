@@ -18,6 +18,11 @@ from dashboard.runner import PipelineRunner
 from dashboard.stage_metadata import STAGES, BY_NUMBER
 from dashboard.visual_hub import VisualHub
 from dashboard import webrtc
+from dashboard.hardware import HardwareMonitor
+from dashboard.playback import Playback, SceneCatalog
+from dashboard.terminal import TerminalManager
+from dashboard.security import DashboardAccess
+from dashboard.extensions import infrastructure_routes
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -25,7 +30,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 
 def initial_config() -> PipelineConfig:
-    return PipelineConfig(
+    cfg = PipelineConfig(
         dataroot=os.getenv("NUSCENES_DATAROOT", "/workspace/data/nuscenes"),
         version=os.getenv("NUSCENES_VERSION", "v1.0-mini"),
         output_dir=os.getenv("AUTONOMY_OUTPUT_DIR", "outputs"),
@@ -37,22 +42,40 @@ def initial_config() -> PipelineConfig:
         temporal_model=os.getenv("TEMPORAL_MODEL", "ema"),
         planner_mode=os.getenv("PLANNER_MODE", "classical"),
         verbose=int(os.getenv("AUTONOMY_VERBOSE", "2")),
+        profile_level=os.getenv("PROFILE_LEVEL", "learning"),
     )
+    path = Path(os.getenv('AUTONOMY_CONFIG_FILE', str(Path(os.getenv('PERSISTENT_ROOT','/workspace'))/'autonomy-config.json')))
+    if path.exists():
+        saved = json.loads(path.read_text())
+        for key,value in saved.items():
+            if hasattr(cfg,key) and key not in {'playback_mode'}:
+                setattr(cfg,key,value)
+    return cfg
 
 
 event_bus = EventBus()
 visual_hub = VisualHub()
-runner = PipelineRunner(initial_config(), event_bus, visual_hub)
+monitor = HardwareMonitor()
+runner = PipelineRunner(initial_config(), event_bus, visual_hub, monitor)
+playback = Playback(runner, SceneCatalog())
+terminal = TerminalManager(REPO_ROOT)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     event_bus.bind_loop(asyncio.get_running_loop())
+    monitor.start()
     yield
+    playback.close()
+    runner.request_stop()
+    terminal.close()
+    monitor.stop()
     await webrtc.close_all()
 
 
 app = FastAPI(title="Autonomy Learning Dashboard", version="1.0.0", lifespan=lifespan)
+app.add_middleware(DashboardAccess)
+app.include_router(infrastructure_routes(runner, monitor, playback, terminal))
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -77,6 +100,7 @@ class ConfigPatch(BaseModel):
     temporal_model: str | None = None
     planner_mode: str | None = None
     verbose: int | None = None
+    profile_level: str | None = None
     save_plots: bool | None = None
     device: str | None = None
     seed: int | None = None
@@ -119,7 +143,7 @@ def stages():
 
 @app.get("/api/state")
 def state():
-    return runner.snapshot()
+    return {**runner.snapshot(), "playback": playback.snapshot()}
 
 
 @app.get("/api/config")
@@ -131,14 +155,34 @@ def config():
 def patch_config(body: ConfigPatch):
     changes = {k: v for k, v in body.model_dump().items() if v is not None}
     try:
-        return runner.update_config(changes)
-    except RuntimeError as exc:
+        with runner.lock:
+            if playback.busy:
+                raise RuntimeError('Pause/stop playback before changing settings')
+            if runner.cfg.playback_mode:
+                changes.setdefault('output_dir', playback.base_output)
+                changes['playback_mode'] = False
+            result = runner.update_config(changes)
+            playback.base_output = runner.cfg.output_dir
+            playback.scene = runner.cfg.scene_index
+            playback.frame = max(0,runner.cfg.sample_index)
+            config_path = Path(os.getenv('AUTONOMY_CONFIG_FILE', str(Path(os.getenv('PERSISTENT_ROOT','/workspace'))/'autonomy-config.json')))
+            config_path.parent.mkdir(parents=True,exist_ok=True)
+            from dataclasses import asdict
+            saved = asdict(runner.cfg)
+            saved['playback_mode'] = False
+            temporary = config_path.with_suffix('.tmp')
+            temporary.write_text(json.dumps(saved,indent=2),encoding='utf-8')
+            temporary.replace(config_path)
+            return result
+    except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
 
 @app.post("/api/run")
 def run(body: RunRequest):
     try:
+        if playback.busy:
+            raise RuntimeError('Pause/stop playback before manual execution')
         if body.mode == "run_stage":
             runner.run_stage(body.target_stage)
         elif body.mode == "run_to":
@@ -152,13 +196,15 @@ def run(body: RunRequest):
 
 @app.post("/api/stop")
 def stop():
-    runner.request_stop()
+    playback.stop()
     return {"accepted": True}
 
 
 @app.post("/api/reset")
 def reset():
     try:
+        if playback.busy:
+            raise RuntimeError('Stop playback before resetting')
         runner.reset()
         return {"ok": True}
     except RuntimeError as exc:

@@ -1,51 +1,52 @@
-from __future__ import annotations
-
-from typing import Any, Dict
+"""Bounded on-device inspection. Basic never performs tensor reductions."""
+from contextvars import ContextVar
+import math
 import numpy as np
 import torch
 
+PROFILE_LEVEL = ContextVar('profile_level', default='basic')
 
-def tensor_info(value: Any) -> Dict[str, Any]:
-    """Return compact statistics for a torch tensor or numpy array.
 
-    This is deliberately similar to the tensor inspection helper you were already
-    using. Every neural stage prints these values so that shape transformations
-    remain visible rather than becoming a black box.
-    """
-
-    if isinstance(value, torch.Tensor):
-        t = value.detach()
-        result: Dict[str, Any] = {
-            "shape": tuple(t.shape),
-            "dtype": str(t.dtype),
-            "device": str(t.device),
-            "elements": int(t.numel()),
-            "MB": round(t.numel() * t.element_size() / (1024 ** 2), 3),
-        }
-        if t.numel() > 0 and (t.is_floating_point() or t.is_complex()):
-            x = t.float()
-            result.update(
-                min=float(x.min().item()),
-                max=float(x.max().item()),
-                mean=float(x.mean().item()),
-                std=float(x.std(unbiased=False).item()),
-            )
+def tensor_info(value, level=None):
+    level = level or PROFILE_LEVEL.get()
+    if not isinstance(value, (torch.Tensor, np.ndarray)):
+        return {'type': type(value).__name__}
+    is_torch = isinstance(value, torch.Tensor)
+    count = value.numel() if is_torch else value.size
+    size = count * value.element_size() if is_torch else value.nbytes
+    result = dict(shape=list(value.shape), dtype=str(value.dtype),
+                  device=str(value.device) if is_torch else 'cpu', elements=int(count),
+                  memory_bytes=int(size), MB=round(size/1024**2, 3),
+                  requires_grad=value.requires_grad if is_torch else False,
+                  min=None, max=None, mean=None, std=None, statistics='disabled')
+    if level == 'basic' or not count:
         return result
-
-    if isinstance(value, np.ndarray):
-        result = {
-            "shape": tuple(value.shape),
-            "dtype": str(value.dtype),
-            "elements": int(value.size),
-            "MB": round(value.nbytes / (1024 ** 2), 3),
-        }
-        if value.size > 0 and np.issubdtype(value.dtype, np.number):
-            result.update(
-                min=float(np.nanmin(value)),
-                max=float(np.nanmax(value)),
-                mean=float(np.nanmean(value)),
-                std=float(np.nanstd(value)),
-            )
-        return result
-
-    return {"type": type(value).__name__}
+    limit = 65536 if level == 'learning' else 1048576
+    x = value.detach() if is_torch else value
+    # Slice before flattening: do not allocate a huge non-contiguous copy.
+    for axis in range(x.ndim):
+        elements = x.numel() if is_torch else x.size
+        if elements <= limit:
+            break
+        selection = [slice(None)] * x.ndim
+        selection[axis] = slice(None, None, max(1, math.ceil(elements / limit)))
+        x = x[tuple(selection)]
+    try:
+        complex_input = x.is_complex() if is_torch else np.iscomplexobj(x)
+        if complex_input:
+            x = x.abs() if is_torch else np.abs(x)
+        if is_torch:
+            x = x.float()
+            stats = [x.min().item(), x.max().item(), x.mean().item(), x.std(unbiased=False).item()]
+            sampled = x.numel()
+        else:
+            x = x.astype(np.float64)
+            stats = [np.min(x), np.max(x), np.mean(x), np.std(x)]
+            sampled = x.size
+        result.update({key: float(v) if math.isfinite(float(v)) else None
+                       for key,v in zip(['min','max','mean','std'], stats)})
+        result.update(statistics='sampled' if sampled < count else 'exact', sampled_elements=int(sampled),
+                      complex_magnitude=bool(complex_input))
+    except (TypeError, RuntimeError, ValueError) as exc:
+        result['statistics'] = 'unavailable: ' + str(exc)
+    return result

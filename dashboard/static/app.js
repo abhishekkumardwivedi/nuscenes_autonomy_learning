@@ -26,6 +26,7 @@ async function api(path, options = {}) {
   const ct = res.headers.get('content-type') || '';
   if (ct.includes('application/json')) data = await res.json();
   else data = await res.text();
+  if (res.status === 401) { location.href = '/login'; throw new Error('Sign in required'); }
   if (!res.ok) {
     const msg = data?.detail || data?.message || `${res.status} ${res.statusText}`;
     throw new Error(msg);
@@ -44,7 +45,7 @@ function escapeHtml(text) {
 function statusLabel(s) {
   return {
     not_started: 'Not started', running: 'Running', completed: 'Completed',
-    failed: 'Failed', warning: 'Warning / stopped', stale: 'Stale',
+    failed: 'Failed', warning: 'Warning', stale: 'Stale', cancelled: 'Cancelled',
   }[s] || s || 'Unknown';
 }
 
@@ -134,7 +135,7 @@ function renderRuntimeCard() {
 
 function renderGlobalRuntime() {
   if (!appState.runtime) return;
-  const busy = appState.runtime.busy;
+  const busy = appState.runtime.busy || appState.runtime.playback?.playing || appState.runtime.playback?.processing;
   $('stopBtn').disabled = !busy;
   $('runToBtn').disabled = busy;
   $('runStageBtn').disabled = busy;
@@ -342,7 +343,8 @@ function setLeftTab(name) {
   document.querySelectorAll('.viewer-content > .tab-page').forEach(x => x.classList.toggle('active', x.id === `left-${name}`));
   $('workspace').classList.toggle('code-focus', name === 'code');
   if (name === 'code') loadCode();
-  if (name === 'graphs') loadArtifacts();
+  if (name === 'artifacts') loadArtifacts();
+  window.DashboardExtensions?.tab(name);
   if (name === 'outputs') loadSummary();
   if (name === 'visual') renderVisualForSelection();
 }
@@ -354,6 +356,7 @@ function setRightTab(name) {
   if (name === 'logs') loadLogs();
   if (name === 'tensor') loadSummary();
   if (name === 'params') renderParams();
+  window.DashboardExtensions?.tab(name);
 }
 
 async function run(mode) {
@@ -558,6 +561,7 @@ function openSettings() {
   $('cfgTemporal').value = c.temporal_model || 'ema';
   $('cfgPlanner').value = c.planner_mode || 'classical';
   $('cfgVerbose').value = String(c.verbose ?? 2);
+  $('cfgProfile').value = c.profile_level || 'learning';
   $('settingsModal').classList.remove('hidden');
 }
 
@@ -567,7 +571,7 @@ async function saveSettings() {
     scene_index: Number($('cfgScene').value), sample_index: Number($('cfgSample').value),
     history_frames: Number($('cfgHistory').value), future_frames: Number($('cfgFuture').value),
     device: $('cfgDevice').value.trim(), temporal_model: $('cfgTemporal').value,
-    planner_mode: $('cfgPlanner').value, verbose: Number($('cfgVerbose').value),
+    planner_mode: $('cfgPlanner').value, profile_level: $('cfgProfile').value, verbose: Number($('cfgVerbose').value),
   };
   try {
     appState.config = await api('/api/config', { method: 'PATCH', body: JSON.stringify(body) });
@@ -706,6 +710,8 @@ function wireUi() {
   $('stopBtn').onclick = stopRun;
   $('resetBtn').onclick = resetPipeline;
   $('retryStageBtn').onclick = () => run('run_stage');
+  $('errorCodeBtn').onclick = () => setLeftTab('code');
+  $('errorLogsBtn').onclick = () => setRightTab('logs');
   $('refreshSummaryBtn').onclick = loadSummary;
   $('refreshArtifactsBtn').onclick = () => loadArtifacts().then(renderVisualForSelection);
   $('clearLogViewBtn').onclick = () => $('logView').innerHTML = '';

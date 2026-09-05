@@ -1,45 +1,24 @@
-# Codex instructions for RunPod deployment
+# Codex RunPod maintenance contract
 
-Use this file as the deployment contract when Codex pulls this repository onto RunPod.
+Preserve Stage 00–20 and educational modules. Infrastructure orchestrates them.
+Read DEPLOY_RUNPOD.md and .env.example. Never commit .env, secrets, tokens,
+datasets, generated outputs, weights or environments.
 
-## Goal
+Use scripts/runpod_boot.sh. It checks the persistent environment, avoids needless
+installs, preserves image torch, reserves 8888 and starts the protected dashboard.
+Future Pod/template startup must be configured in the RunPod control plane;
+repository file edits cannot do that alone.
 
-Deploy the Autonomy Learning Dashboard reproducibly on RunPod and keep every environment/setup fix in Git so the next fresh pod needs only the documented setup command.
+Fix recurring setup issues durably in scripts, requirements or documentation.
+Never silently reinstall CUDA/torch or delete an incompatible venv: use the original
+image or a new VENV_DIR. Keep startup logs, token, settings, caches and data persistent.
 
-## Procedure
+Validate compilation, existing smoke tests and tests/test_dashboard.py. On Linux/CUDA
+check shared HTTP/WSS auth, PTY prompt/resize/Ctrl+C/reconnect, hardware, persisted
+profiles, stage errors/cancellation, static artifacts and scene playback. Use the
+single HTTPS/WSS 8888 endpoint; UDP WebRTC is optional. A proxy hostname alone
+does not justify a public unauthenticated terminal.
 
-1. Clone/pull the repo under `/workspace`.
-2. Read `DEPLOY_RUNPOD.md`, `.env.example`, and `scripts/setup_runpod.sh` before making environment changes.
-3. Run:
-   ```bash
-   ./scripts/setup_runpod.sh
-   ```
-4. If nuScenes Mini is absent, download it to `/workspace/data/nuscenes` using the repository script. **Never commit dataset content.**
-5. Create `.env` from `.env.example` for local deployment values. **Never commit `.env` or secrets.**
-6. Validate:
-   ```bash
-   ./scripts/check_dashboard.sh
-   python smoke_test.py
-   ```
-7. Launch:
-   ```bash
-   ./scripts/run_dashboard.sh
-   ```
-8. Verify `/api/health`, the dashboard page, WebSocket status, stage code view, and at least Stage 00. If nuScenes exists, verify Stage 01 as well.
-
-## If deployment needs a fix
-
-Do not apply an undocumented one-off shell workaround and stop there. Instead:
-
-- make the smallest durable change in `scripts/setup_runpod.sh`, `scripts/run_dashboard.sh`, requirements, `.env.example`, or documentation;
-- keep CUDA-specific PyTorch installation explicit—do not let generic pip requirements silently replace the RunPod torch build;
-- rerun `./scripts/check_dashboard.sh` and the relevant smoke test;
-- inspect `git diff` and ensure no dataset, outputs, checkpoints, credentials, endpoint tokens, or `.env` are staged;
-- commit the durable deployment fix with a clear commit message, for example:
-  `fix(runpod): preserve CUDA torch during dashboard setup`.
-
-If a problem is specific to one temporary RunPod host and cannot be made portable, document it in the deployment notes rather than hard-coding host-specific values.
-
-## Networking rule
-
-The dashboard must remain useful with only RunPod HTTP port 8080 exposed. WebRTC is an enhancement; HTTP/WebSocket fallback is mandatory. If direct WebRTC needs TURN/extra network configuration, keep it optional and configurable through environment variables.
+Commit durable fixes after verification. Report actual evidence and limitations:
+NVML samples may miss peaks, missing counters are N/A, scene-boundary padding is
+illustrative, and replay is compute-paced rather than guaranteed real-time inference.

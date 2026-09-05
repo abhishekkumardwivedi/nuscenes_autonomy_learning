@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "description": "Vendored terminal assets; no Node server is required on RunPod",
+  "scripts": {"vendor": "node scripts/vendor_terminal.cjs"},
+  "dependencies": {"@xterm/xterm": "5.5.0", "@xterm/addon-fit": "0.10.0"}
+}

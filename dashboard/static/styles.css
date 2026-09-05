@@ -249,3 +249,27 @@ body.panel-expanded { overflow: hidden; }
 .info-panel.fullscreen-panel .log-view { height: calc(100vh - 130px); min-height: 0; }
 .info-panel.fullscreen-panel .json-view { max-height: calc(100vh - 180px); }
 .viewer-panel.fullscreen-panel .code-shell { height: calc(100vh - 130px); min-height: 0; }
+.playbackbar { display:flex; gap:5px; align-items:center; flex-wrap:wrap; padding:5px 12px; border-bottom:1px solid var(--line); font-size:10px; }
+.playbackbar select { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:5px; max-width:190px; padding:3px; }
+#frameScrubber { flex:1; min-width:70px; max-width:360px; }
+#playbackStatus { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#terminalHost { height:calc(100vh - 330px); min-height:320px; padding:6px; background:#080d19; }
+.fullscreen-panel #terminalHost { height:calc(100vh - 125px); }
+.metric-grid { display:grid; grid-template-columns:minmax(95px,1fr) 1.6fr; gap:5px 10px; margin:0; font-size:11px; }
+.metric-grid dt { color:var(--muted); }
+.metric-grid dd { margin:0; overflow-wrap:anywhere; }
+.resource-chart { width:100%; height:110px; display:block; }
+#hardwareCharts figure { margin:12px 0; }
+#hardwareCharts figcaption { color:var(--muted); font-size:11px; margin-bottom:4px; }
+.profile-table { border-collapse:collapse; font-size:11px; width:100%; }
+.profile-table th,.profile-table td { padding:6px; text-align:left; border-bottom:1px solid var(--line); }
+#stageComparison { overflow:auto; }
+.state-badge.running::before { content:''; display:inline-block; width:8px; height:8px; border:2px solid var(--accent); border-right-color:transparent; border-radius:50%; margin-right:5px; animation:spin .8s linear infinite; }
+@keyframes spin { to {transform:rotate(360deg)} }
+.state-badge.cancelled { color:var(--warn); }
+.stage-chip.cancelled .state-dot { background:var(--warn); }
+.info-content { max-height:calc(100vh - 280px); overflow:auto; }
+.fullscreen-panel .info-content { max-height:none; }
+.visual-shell { height:calc(100vh - 300px); }
+.fullscreen-panel .visual-shell { height:calc(100vh - 103px); }
+@media(max-width:980px) { .info-content {max-height:70vh;} .visual-shell{height:58vh;} }

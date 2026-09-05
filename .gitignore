@@ -25,3 +25,7 @@ checkpoints/
 .idea/
 .DS_Store
 Thumbs.db
+
+node_modules/
+*.token
+.setup*.json

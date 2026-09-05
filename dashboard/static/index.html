@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Autonomy Learning Dashboard</title>
   <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/vendor/xterm.css" />
 </head>
 <body>
   <div id="connectionBanner" class="connection-banner hidden">Connection to RunPod lost. Reconnecting…</div>
@@ -41,6 +42,17 @@
 
   <section id="stageNavigator" class="stage-navigator" aria-label="Pipeline stages"></section>
 
+  <section class="playbackbar" aria-label="Scene playback">
+    <select id="sceneSelect" aria-label="Scene"><option>Loading scenes…</option></select>
+    <button id="previousFrameBtn" class="small-btn" title="Previous frame">Previous</button>
+    <button id="playSceneBtn" class="small-btn">Play</button>
+    <button id="pauseSceneBtn" class="small-btn">Pause</button>
+    <button id="nextFrameBtn" class="small-btn" title="Next frame">Next</button>
+    <input id="frameScrubber" type="range" min="0" max="0" value="0" aria-label="Frame timeline">
+    <span id="frameLabel">Frame —</span>
+    <select id="playbackSpeed" aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option></select>
+    <span id="playbackStatus" class="muted">Ready</span>
+  </section>
   <main id="workspace" class="workspace">
     <section id="viewerPanel" class="viewer-panel">
       <div class="panel-header" title="Double-click this header to toggle fullscreen">
@@ -58,7 +70,9 @@
         <button class="tab" data-tab="inputs">Inputs</button>
         <button class="tab" data-tab="outputs">Outputs</button>
         <button class="tab" data-tab="code">Code</button>
-        <button class="tab" data-tab="graphs">Artifacts</button>
+        <button class="tab" data-tab="graphs">Graphs</button>
+        <button class="tab" data-tab="artifacts">Artifacts</button>
+        <button class="tab" data-tab="console">Console</button>
       </nav>
 
       <div class="viewer-content">
@@ -110,7 +124,7 @@
           <div class="code-shell"><pre id="codeView" class="code-view"></pre></div>
         </section>
 
-        <section id="left-graphs" class="tab-page">
+        <section id="left-artifacts" class="tab-page">
           <div class="content-pad">
             <div class="section-row">
               <h2>Saved artifacts</h2>
@@ -118,6 +132,18 @@
             </div>
             <div id="artifactGrid" class="artifact-grid"></div>
           </div>
+        </section>
+        <section id="left-graphs" class="tab-page"><div class="content-pad">
+          <h2>Stage Profiling</h2><p class="muted">Execution time by stage (ms).</p>
+          <canvas id="stageTimeGraph" class="resource-chart" aria-label="Stage execution time comparison" role="img"></canvas>
+          <div id="stageComparison"></div>
+        </div></section>
+        <section id="left-console" class="tab-page">
+          <div class="log-toolbar"><span id="consoleStatus">Console disconnected</span>
+            <div><button id="connectConsoleBtn" class="small-btn">Connect / Reconnect</button>
+            <button id="interruptConsoleBtn" class="small-btn">Ctrl+C</button>
+            <button id="clearConsoleBtn" class="small-btn">Clear</button></div></div>
+          <div id="terminalHost" aria-label="Interactive terminal"></div>
         </section>
       </div>
     </section>
@@ -147,9 +173,18 @@
         <button class="tab" data-tab="logs">Logs</button>
         <button class="tab" data-tab="tensor">Tensor Info</button>
         <button class="tab" data-tab="params">Parameters</button>
+        <button class="tab" data-tab="hardware">Hardware</button>
+        <button class="tab" data-tab="profiler">Profiler</button>
       </nav>
 
       <div class="info-content">
+        <section id="right-hardware" class="tab-page"><div class="content-pad compact-pad">
+          <h2>Hardware · last 120 seconds</h2><div id="hardwareValues">Waiting for telemetry…</div><div id="hardwareCharts"></div>
+        </div></section>
+        <section id="right-profiler" class="tab-page"><div class="content-pad compact-pad">
+          <h2>Stage profile</h2><div id="stageProfile">Run a stage to capture its resource cost.</div>
+          <p class="muted">Use Graphs for cross-stage comparison. Unavailable metrics are N/A; GPU peaks are sampled.</p>
+        </div></section>
         <section id="right-overview" class="tab-page active">
           <div class="content-pad compact-pad">
             <div class="dataset-tag" id="overviewDataset">nuScenes Mini</div>
@@ -161,6 +196,8 @@
               <strong id="errorTitle">Stage failed</strong>
               <p id="errorMessage"></p>
               <button id="retryStageBtn" class="small-btn danger">Retry stage</button>
+              <button id="errorCodeBtn" class="small-btn">View code</button>
+              <button id="errorLogsBtn" class="small-btn">Full traceback</button>
             </div>
           </div>
         </section>
@@ -209,6 +246,7 @@
         <label>Device<input id="cfgDevice" placeholder="auto / cuda / cpu" /></label>
         <label>Temporal model<select id="cfgTemporal"><option value="ema">EMA (interpretable)</option><option value="convgru">ConvGRU</option></select></label>
         <label>Planner mode<select id="cfgPlanner"><option value="classical">Classical</option><option value="learned">Learned</option></select></label>
+        <label>Profile level<select id="cfgProfile"><option value="basic">Basic (no statistics)</option><option value="learning" selected>Learning (bounded statistics)</option><option value="detailed">Detailed (larger sample)</option></select></label>
         <label>Verbose<select id="cfgVerbose"><option value="0">0 — quiet</option><option value="1">1 — summary</option><option value="2">2 — learning</option><option value="3">3 — deep</option></select></label>
       </div>
       <div class="modal-note">Changing settings resets the in-memory pipeline cache so downstream tensors cannot accidentally use a different configuration.</div>
@@ -219,6 +257,9 @@
   </div>
 
   <div id="toastContainer" class="toast-container"></div>
+  <script src="/static/vendor/xterm.js"></script>
+  <script src="/static/vendor/addon-fit.js"></script>
   <script src="/static/app.js"></script>
+  <script src="/static/extensions.js"></script>
 </body>
 </html>

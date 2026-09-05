@@ -2,12 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from nuscenes.nuscenes import NuScenes
 
 from config import PipelineConfig
 from pipeline_context import PipelineContext
 from utils.logging_utils import LessonLogger, make_stage_dir, save_stage_summary
-from utils.nuscenes_utils import CAMERA_CHANNELS, RADAR_CHANNELS, scene_sample_tokens
 
 STAGE_NUMBER = 1
 STAGE_NAME = "nuScenes sequence loading"
@@ -26,6 +24,10 @@ def run(ctx: PipelineContext, cfg: PipelineConfig, log: LessonLogger) -> None:
             f"nuScenes dataroot does not exist: {dataroot}\n"
             "Download/extract v1.0-mini and pass --dataroot /path/to/nuscenes"
         )
+    if not (dataroot / cfg.version / 'scene.json').is_file():
+        raise FileNotFoundError(f'Missing nuScenes metadata: {dataroot / cfg.version}. Download/extract the dataset or change its path in Settings.')
+    from nuscenes.nuscenes import NuScenes
+    from utils.nuscenes_utils import CAMERA_CHANNELS, RADAR_CHANNELS, scene_sample_tokens
     nusc = NuScenes(version=cfg.version, dataroot=str(dataroot), verbose=(cfg.verbose >= 3))
     log.info(f"Version = {cfg.version}")
     log.info(f"Scenes available = {len(nusc.scene)}")
@@ -42,7 +44,7 @@ def run(ctx: PipelineContext, cfg: PipelineConfig, log: LessonLogger) -> None:
     log.substage(1, 3, "Choose current frame with history and future")
     min_current = cfg.history_frames - 1
     max_current = len(tokens) - cfg.future_frames - 1
-    if max_current < min_current:
+    if max_current < min_current and not cfg.playback_mode:
         raise RuntimeError(
             "Selected scene is too short for requested history/future. "
             f"Need history={cfg.history_frames}, future={cfg.future_frames}."
@@ -54,6 +56,14 @@ def run(ctx: PipelineContext, cfg: PipelineConfig, log: LessonLogger) -> None:
 
     history_tokens = tokens[current_index - cfg.history_frames + 1 : current_index + 1]
     future_tokens = tokens[current_index + 1 : current_index + 1 + cfg.future_frames]
+    if cfg.playback_mode:
+        # Replay every keyframe, including scene boundaries. Repeated endpoint
+        # poses/images are explicit padding, not additional recorded evidence.
+        current_index = max(0, min(cfg.sample_index, len(tokens) - 1))
+        history_tokens = [tokens[max(0, i)] for i in range(current_index-cfg.history_frames+1, current_index+1)]
+        future_tokens = [tokens[min(len(tokens)-1, i)] for i in range(current_index+1, current_index+cfg.future_frames+1)]
+        if current_index < min_current or current_index > max_current:
+            log.info('Playback boundary: missing history/future is padded with the nearest endpoint; padded predictions are illustrative.')
     history_samples = [nusc.get("sample", t) for t in history_tokens]
     future_samples = [nusc.get("sample", t) for t in future_tokens]
     current_sample = history_samples[-1]

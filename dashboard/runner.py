@@ -6,6 +6,9 @@ import importlib
 import json
 from pathlib import Path
 import threading
+import time
+from dashboard.profiling import StageProfile
+from utils.tensor_utils import PROFILE_LEVEL
 import traceback
 from typing import Any
 
@@ -30,8 +33,10 @@ class PipelineRunner:
     browser responsive while PyTorch / nuScenes stages are executing.
     """
 
-    def __init__(self, cfg: PipelineConfig, event_bus, visual_hub) -> None:
+    def __init__(self, cfg: PipelineConfig, event_bus, visual_hub, monitor=None) -> None:
         self.cfg = cfg
+        self.monitor = monitor
+        self._busy = False
         self.event_bus = event_bus
         self.visual_hub = visual_hub
         self.ctx = PipelineContext()
@@ -59,13 +64,15 @@ class PipelineRunner:
                 "ended_at": None,
                 "logs": [],
                 "last_tensor": None,
+                "tensors": {},
+                "profile": None,
             }
             for s in STAGES
         }
 
     @property
     def busy(self) -> bool:
-        return bool(self.worker and self.worker.is_alive())
+        return self._busy
 
     def snapshot(self) -> dict[str, Any]:
         with self.lock:
@@ -94,8 +101,15 @@ class PipelineRunner:
             "history_frames", "future_frames", "image_height", "image_width",
             "bev_resolution", "depth_bins", "pretrained_backbone", "temporal_model",
             "planner_mode", "verbose", "save_plots", "device", "seed", "backend",
-            "carla_host", "carla_port",
+            "carla_host", "carla_port", "profile_level", "playback_mode",
         }
+        if changes.get('profile_level', self.cfg.profile_level) not in {'basic', 'learning', 'detailed'}:
+            raise ValueError('Profile level must be basic, learning, or detailed')
+        for key in ('history_frames', 'future_frames', 'image_height', 'image_width', 'depth_bins'):
+            if key in changes and int(changes[key]) < 1:
+                raise ValueError(f'{key} must be positive')
+        if 'bev_resolution' in changes and float(changes['bev_resolution']) <= 0:
+            raise ValueError('BEV resolution must be positive')
         with self.lock:
             for key, value in changes.items():
                 if key in allowed and hasattr(self.cfg, key):
@@ -155,10 +169,19 @@ class PipelineRunner:
             raise RuntimeError(
                 f"Stage {target:02d} needs upstream context. Run To Stage {target:02d} first."
             )
+        if self.stale_from is not None and target >= self.stale_from:
+            raise RuntimeError('Upstream results changed. Use Run To to rebuild compatible context.')
+        if target <= self.completed_through:
+            self._invalidate_downstream(target + 1)
+            self.completed_through = target - 1
         self._start_worker(mode="run_stage", start=target, target=target)
 
     def _start_worker(self, mode: str, start: int, target: int) -> None:
+        manifest = self.cfg.output_path / 'frame.json'
+        if manifest.exists():
+            manifest.unlink()  # This frame is no longer a fully validated cached result.
         self.stop_event.clear()
+        self._busy = True
         self.run_id += 1
         run_id = self.run_id
         self.worker = threading.Thread(
@@ -176,13 +199,35 @@ class PipelineRunner:
             event_sink=self._on_log_event,
             cancel_check=self._cancel_check,
         )
+        token = PROFILE_LEVEL.set(self.cfg.profile_level if self.cfg.verbose else 'basic')
         try:
             for number in range(start, target + 1):
                 self._cancel_check()
                 stage = BY_NUMBER[number]
-                module = importlib.import_module(stage.module)
                 self._mark_stage_started(stage.number)
-                module.run(self.ctx, self.cfg, log)
+                self.ctx.written.clear()
+                profile = StageProfile(number, self.monitor, self.cfg.torch_device)
+                status = 'failed'
+                try:
+                    module = importlib.import_module(stage.module)
+                    module.run(self.ctx, self.cfg, log)
+                    self._cancel_check()
+                    status = 'completed'
+                except PipelineStopRequested:
+                    status = 'cancelled'
+                    raise
+                finally:
+                    try:
+                        result = profile.finish({k:self.ctx.get(k) for k in self.ctx.written}, status)
+                        result['scene_index'] = self.cfg.scene_index
+                        result['sample_index'] = self.cfg.sample_index
+                        folder = stage_dir(self.cfg.output_path, stage)
+                        folder.mkdir(parents=True, exist_ok=True)
+                        (folder / 'profile.json').write_text(json.dumps(result, indent=2), encoding='utf-8')
+                        with self.lock:
+                            self.states[number]['profile'] = result
+                    except Exception as profile_error:
+                        self._append_log_file(number, 'PROFILE ERROR', str(profile_error))
                 self._mark_stage_completed(stage.number)
                 if mode == "run_stage":
                     # Rerunning an upstream stage invalidates every later output.
@@ -199,26 +244,30 @@ class PipelineRunner:
             self.event_bus.emit({"type": "run_stopped", "run_id": run_id, "message": str(exc), "state": self.snapshot()})
         except Exception as exc:
             tb = traceback.format_exc()
+            failed_stage = self.current_stage
             self._mark_stage_failed(self.current_stage, exc, tb)
             with self.lock:
                 self.current_stage = None
             self.event_bus.emit({
                 "type": "run_failed",
                 "run_id": run_id,
-                "stage": self.current_stage,
+                "stage": failed_stage,
                 "error": f"{type(exc).__name__}: {exc}",
                 "traceback": tb,
                 "state": self.snapshot(),
             })
         finally:
+            PROFILE_LEVEL.reset(token)
             self.stop_event.clear()
+            self._busy = False
+            self.event_bus.emit({'type': 'run_idle', 'state': self.snapshot()})
 
     def _mark_stage_started(self, number: int) -> None:
         stage = BY_NUMBER[number]
         with self.lock:
             self.current_stage = number
             st = self.states[number]
-            st.update(status="running", progress=2, current_step="Starting stage", error=None, started_at=_now(), ended_at=None)
+            st.update(status="running", logs=[], tensors={}, profile=None, progress=2, current_step="Starting stage", error=None, started_at=_now(), ended_at=None)
         self.visual_hub.set_status(number, stage.title, "running")
         self._emit_state(number)
 
@@ -228,8 +277,6 @@ class PipelineRunner:
             st = self.states[number]
             st.update(status="completed", progress=100, current_step="Completed", ended_at=_now())
             self.completed_through = max(self.completed_through, number)
-            if self.stale_from is not None and number >= self.stale_from:
-                self.stale_from = None
         self._refresh_visual(number)
         self.visual_hub.set_status(number, stage.title, "completed")
         self._emit_state(number)
@@ -252,7 +299,7 @@ class PipelineRunner:
         stage = BY_NUMBER[number]
         with self.lock:
             st = self.states[number]
-            st.update(status="warning", current_step="Stopped by user", error=message, ended_at=_now())
+            st.update(status="cancelled", current_step="Stopped by user", error=message, ended_at=_now())
         self.visual_hub.set_status(number, stage.title, "stopped")
         self._emit_state(number)
 
@@ -288,6 +335,7 @@ class PipelineRunner:
                 st["current_step"] = message
             elif kind == "tensor":
                 st["last_tensor"] = event.get("tensor_info")
+                st["tensors"][event.get("name", "tensor")] = event.get("tensor_info")
                 st["current_step"] = event.get("name", message)
         self._append_log_file(int(number), level.upper(), message)
         if kind in {"substage", "outcome"}:
@@ -360,3 +408,16 @@ class PipelineRunner:
                     "kind": "image" if p.suffix.lower() in {".png", ".jpg", ".jpeg"} else "data",
                 })
         return items
+
+    def stage_profiles(self):
+        profiles = []
+        for stage in STAGES:
+            path = stage_dir(self.cfg.output_path, stage) / 'profile.json'
+            if path.exists():
+                try:
+                    result = json.loads(path.read_text())
+                    result['runtime_status'] = self.states[stage.number]['status']
+                    profiles.append(result)
+                except (OSError, ValueError):
+                    pass
+        return profiles

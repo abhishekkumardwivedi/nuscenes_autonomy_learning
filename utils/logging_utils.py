@@ -83,6 +83,7 @@ class LessonLogger:
     def tensor(self, name: str, value: Any) -> None:
         if self.verbose >= 1:
             stats = tensor_info(value)
+            stats.update(name=name, stage=self.current_stage)
             print(f"    {name}: {stats}")
             self._emit("tensor", f"{name}: {stats}", level="tensor", name=name, tensor_info=stats)
 

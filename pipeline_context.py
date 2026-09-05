@@ -13,11 +13,14 @@ class PipelineContext:
     """
 
     data: Dict[str, Any] = field(default_factory=dict)
+    written: set[str] = field(default_factory=set)
 
     def set(self, key: str, value: Any) -> None:
+        self.written.add(key)
         self.data[key] = value
 
     def update(self, values: Dict[str, Any]) -> None:
+        self.written.update(values)
         self.data.update(values)
 
     def get(self, key: str, default: Any = None) -> Any:
