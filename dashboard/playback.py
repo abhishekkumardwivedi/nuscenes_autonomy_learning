@@ -201,7 +201,8 @@ class Playback:
         if state['status'] == 'failed':
             raise RuntimeError(state['error'])
         if state['status'] != 'completed':
-            self.playing = False
+            if self.pending is None:
+                self.playing = False
             return
         folder.mkdir(parents=True,exist_ok=True)
         manifest.write_text(json.dumps(dict(scene=scene,frame=frame,timestamp=timestamp,completed_through=target)),encoding='utf-8')

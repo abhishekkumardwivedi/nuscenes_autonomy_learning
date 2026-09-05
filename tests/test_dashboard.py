@@ -119,6 +119,32 @@ class RunnerTests(unittest.TestCase):
 
 
 class AccessTests(unittest.TestCase):
+    @unittest.skipUnless(os.name=='posix','PTY requires Linux')
+    def test_console_websocket_reconnect(self):
+        from fastapi import FastAPI, WebSocket
+        from fastapi.testclient import TestClient
+        from dashboard.terminal import TerminalManager
+        manager=TerminalManager(tempfile.gettempdir())
+        app=FastAPI()
+        @app.websocket('/console')
+        async def console(ws:WebSocket): await manager.connect(ws)
+        try:
+            with TestClient(app) as client:
+                with client.websocket_connect('/console') as ws:
+                    identity=ws.receive_json()['id']
+                    ws.send_json({'type':'input','data':'export RECONNECT_TEST=works; echo SESSION_READY\n'})
+                    output=''
+                    while 'SESSION_READY' not in output:
+                        output+=ws.receive_json().get('data','')
+                with client.websocket_connect('/console?session='+identity) as ws:
+                    self.assertEqual(ws.receive_json()['id'],identity)
+                    ws.send_json({'type':'input','data':'printf "RESULT:%s\\n" "$RECONNECT_TEST"\n'})
+                    output=''
+                    while 'RESULT:works' not in output:
+                        output+=ws.receive_json().get('data','')
+                    self.assertIn('RESULT:works',output)
+        finally: manager.close()
+
     def test_shared_http_and_websocket_gate(self):
         from fastapi import FastAPI, WebSocket
         from fastapi.testclient import TestClient

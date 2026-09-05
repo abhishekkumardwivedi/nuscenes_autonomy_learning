@@ -181,15 +181,16 @@ def patch_config(body: ConfigPatch):
 @app.post("/api/run")
 def run(body: RunRequest):
     try:
-        if playback.busy:
-            raise RuntimeError('Pause/stop playback before manual execution')
-        if body.mode == "run_stage":
-            runner.run_stage(body.target_stage)
-        elif body.mode == "run_to":
-            runner.run_to(body.target_stage)
-        else:
-            raise ValueError("mode must be 'run_to' or 'run_stage'")
-        return {"accepted": True, "mode": body.mode, "target_stage": body.target_stage}
+        with runner.lock:
+            if playback.busy:
+                raise RuntimeError('Pause/stop playback before manual execution')
+            if body.mode == 'run_stage':
+                runner.run_stage(body.target_stage)
+            elif body.mode == 'run_to':
+                runner.run_to(body.target_stage)
+            else:
+                raise ValueError("mode must be run_to or run_stage")
+            return dict(accepted=True, mode=body.mode, target_stage=body.target_stage)
     except (RuntimeError, ValueError) as exc:
         raise HTTPException(status_code=409, detail=str(exc))
 
@@ -203,9 +204,10 @@ def stop():
 @app.post("/api/reset")
 def reset():
     try:
-        if playback.busy:
-            raise RuntimeError('Stop playback before resetting')
-        runner.reset()
+        with runner.lock:
+            if playback.busy:
+                raise RuntimeError('Stop playback before resetting')
+            runner.reset()
         return {"ok": True}
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
