@@ -1,0 +1,14 @@
+# Recommended Python: 3.12 (nuScenes devkit v1.2.0 supports 3.9 and 3.12)
+nuscenes-devkit>=1.2.0
+numpy>=1.24
+Pillow>=10.0
+matplotlib>=3.7
+pyquaternion>=0.9.9
+opencv-python>=4.8
+scipy>=1.10
+tqdm>=4.66
+
+# Install torch/torchvision using the wheel appropriate for your CUDA runtime.
+# These generic requirements are convenient if your environment already resolves CUDA correctly.
+torch>=2.2
+torchvision>=0.17
